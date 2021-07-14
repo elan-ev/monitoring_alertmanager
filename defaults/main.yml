@@ -1,0 +1,4 @@
+---
+
+alertmanager_config_template: ''
+alertmanager_env_file: 'alertmanager.env'

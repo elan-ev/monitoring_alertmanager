@@ -1,0 +1,148 @@
+---
+
+- name: install dependencies
+  package:
+    name: tar
+    state: present
+
+- name: create alertmanager user
+  user:
+    name: alertmanager
+    state: present
+
+- name: create alertmanager directories
+  file:
+    path: '{{ item }}'
+    state: directory
+    owner: alertmanager
+    group: alertmanager
+    mode: '0744'
+  loop:
+    - /etc/alertmanager
+    - /var/lib/alertmanager
+
+- name: get meta data
+  block:
+    - name: get latest release data
+      uri:
+        url: https://api.github.com/repos/prometheus/alertmanager/releases/latest
+        return_content: true
+        headers:
+          Accept: "application/vnd.github.v3+json"
+      register: json_reponse
+    - name: get alertmanager version on remote
+      slurp:
+        src: /etc/alertmanager/alertmanager_version
+      register: alertmanager_remote_version
+      ignore_errors: true
+
+- name: get checksum
+  block:
+    - name: get sha256sums-file link
+      set_fact:
+        _sha256_uri: '{{ item.browser_download_url }}'
+      when: "'sha256sums' in item.name"
+      with_items: '{{ json_reponse.json.assets }}'
+    - name: get checksum from github
+      set_fact:
+        _checksums: "{{ lookup('url', _sha256_uri, wantlist=True) | list }}"
+    - name: get checksum for amd64
+      set_fact:
+        alertmanager_checksum: "{{ item.split(' ')[0] }}"
+      with_items: "{{ _checksums }}"
+      when: "'linux-amd64.tar.gz' in item"
+  when: alertmanager_remote_version["failed"] or alertmanager_remote_version["content"] | b64decode != json_reponse.json.tag_name  # noqa 204
+
+- name: download and install alertmanager
+  block:
+    - name: get alertmanager download link
+      set_fact:
+        _alertmanager_uri: '{{ item.browser_download_url }}'
+      when: "'linux-amd64.tar.gz' in item.name"
+      with_items: '{{ json_reponse.json.assets }}'
+    - name: download archive
+      get_url:
+        url: '{{ _alertmanager_uri }}'
+        dest: /tmp/alertmanager-linux-amd64.tar.gz
+        checksum: 'sha256:{{ alertmanager_checksum }}'
+        mode: '0644'
+    - name: unpack archive
+      unarchive:
+        remote_src: true
+        src: /tmp/alertmanager-linux-amd64.tar.gz
+        dest: /tmp
+        list_files: true
+      register: _unarchived
+    - name: register unarchived folder
+      set_fact:
+        _unarchived_folder: '{{ _unarchived.files[0].split("/")[0] }}'
+    - name: move alertmanager
+      copy:
+        remote_src: true
+        src: '/tmp/{{ _unarchived_folder }}/{{ item }}'
+        dest: '/usr/local/bin/{{ item }}'
+        owner: root
+        group: root
+        mode: '0755'
+      loop:
+        - alertmanager
+        - amtool
+    - name: create initial alertmanager configuration
+      copy:
+        remote_src: true
+        src: '/tmp/{{ _unarchived_folder }}/alertmanager.yml'
+        dest: /etc/alertmanager/
+        owner: alertmanager
+        group: alertmanager
+        mode: '0644'
+      when: alertmanager_config_template is not truthy
+    - name: clean up temp
+      file:
+        path: '{{ item }}'
+        state: absent
+      with_items:
+        - /tmp/alertmanager-linux-amd64.tar.gz
+        - '/tmp/{{ _unarchived_folder }}'
+    - name: create binary version file
+      template:
+        src: alertmanager_version.j2
+        dest: /etc/alertmanager/alertmanager_version
+        owner: alertmanager
+        group: alertmanager
+        mode: '0644'
+  when: alertmanager_remote_version["failed"] or alertmanager_remote_version["content"] | b64decode != json_reponse.json.tag_name  # noqa 204
+  notify: restart alertmanager
+
+- name: create alertmanager configuration
+  template:
+    src: '{{ alertmanager_config_template }}'
+    dest: /etc/alertmanager/alertmanager.yml
+    mode: '0644'
+    owner: alertmanager
+    group: alertmanager
+  when: alertmanager_config_template is truthy
+  notify: restart alertmanager
+
+- name: create alertmanager.env file
+  copy:
+    src: '{{ alertmanager_env_file }}'
+    dest: /etc/default/alertmanager
+    mode: '0644'
+    owner: root
+    group: root
+  notify: restart alertmanager
+
+- name: copy service file
+  copy:
+    src: alertmanager.service
+    dest: /etc/systemd/system/
+    mode: '0644'
+    owner: root
+    group: root
+  notify: restart alertmanager
+
+- name: start and enable alertmanager
+  service:
+    name: alertmanager
+    state: started
+    enabled: true

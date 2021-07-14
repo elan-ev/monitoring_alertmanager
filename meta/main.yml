@@ -1,0 +1,20 @@
+galaxy_info:
+  role_name: monitoring_alertmanager
+  namespace: tibroc
+  author: Timo Nogueira Brockmeyer
+  description: install the alertmanager
+  company: virtUOS
+  license: BSD-3-Clause
+  min_ansible_version: 2.10
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - bionic
+    - name: EL
+      versions:
+        - 8
+    - name: Debian
+      versions:
+        - all
+dependencies: []
