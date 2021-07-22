@@ -1,6 +1,6 @@
 # Ansible Role for the alertmanager
 
-![molecule](https://github.com/tibroc/monitoring_loki/actions/workflows/molecule.yml/badge.svg)
+![molecule](https://github.com/elan/monitoring_loki/actions/workflows/molecule.yml/badge.svg)
 
 Install the latest [alertmanager](https://github.com/prometheus/alertmanager) version with [ansible](https://docs.ansible.com/).
 This role is the multi-os ansible equivalent of https://github.com/lkiesow/prometheus-rpm.
