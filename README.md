@@ -25,7 +25,8 @@ Just add the role to your playbook:
 - hosts: all
   become: true
   roles:
-    - elan.monitoring_alertmanager
+    - role: elan.monitoring_alertmanager
+      alertmanager_config_template: 'custom_templates/alertmanager.yml.j2'
 ```
 
 ## Development
