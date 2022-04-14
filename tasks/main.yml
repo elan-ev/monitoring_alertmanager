@@ -9,6 +9,7 @@
   user:
     name: alertmanager
     state: present
+    create_home: false
 
 - name: create alertmanager directories
   file:
